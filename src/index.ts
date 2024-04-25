@@ -1,49 +1,369 @@
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { etag } from 'hono/etag';
+
 /**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Bind resources to your worker in `wrangler.toml`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
+ * Types
  */
-
-import handleProxy from './proxy';
-import handleRedirect from './redirect';
-import apiRouter from './router';
-
-// Export a default object containing event handlers
-export default {
-	// The fetch handler is invoked when this worker receives a HTTP(S) request
-	// and should return a Response (optionally wrapped in a Promise)
-	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		// You'll find it helpful to parse the request.url string into a URL object. Learn more at https://developer.mozilla.org/en-US/docs/Web/API/URL
-		const url = new URL(request.url);
-
-		// You can get pretty far with simple logic like if/switch-statements
-		switch (url.pathname) {
-			case '/redirect':
-				return handleRedirect.fetch(request, env, ctx);
-
-			case '/proxy':
-				return handleProxy.fetch(request, env, ctx);
-		}
-
-		if (url.pathname.startsWith('/api/')) {
-			// You can also use more robust routing
-			return apiRouter.handle(request);
-		}
-
-		return new Response(
-			`Try making requests to:
-      <ul>
-      <li><code><a href="/redirect?redirectUrl=https://example.com/">/redirect?redirectUrl=https://example.com/</a></code>,</li>
-      <li><code><a href="/proxy?modify&proxyUrl=https://example.com/">/proxy?modify&proxyUrl=https://example.com/</a></code>, or</li>
-      <li><code><a href="/api/todos">/api/todos</a></code></li>`,
-			{ headers: { 'Content-Type': 'text/html' } }
-		);
-	},
+type Bindings = {
+  DB: D1Database;
 };
+// Requests
+export type UserAddRequest = {
+  email: string;
+};
+export type DailyRolyPolyCountUpRequest = {
+  direction: 'east' | 'west' | 'south' | 'north';
+};
+export type DailyOthersCountUpRequest = {
+  object: 'dog' | 'cat' | 'butterfly';
+};
+// Responses
+// DB table definitions
+export type User = {
+  id: number;
+  email: string;
+};
+export type ExistsRecord = {
+  exists_record: number;
+};
+export type DailyRolyPolyDirectionCounts = {
+  id: number;
+  user_id: number;
+  date: string;
+  east: number;
+  west: number;
+  south: number;
+  north: number;
+};
+export type DailyOthersCounts = {
+  id: number;
+  user_id: number;
+  date: string;
+  dog: number;
+  cat: number;
+  butterfly: number;
+};
+
+/**
+ * App
+ */
+const app = new Hono<{ Bindings: Bindings }>();
+app.use('*', cors(), etag());
+
+/**
+ * Endpoints
+ */
+// user: Get user
+app.get('/users/:userId', async (context) => {
+  try {
+    // Request
+    const userId = Number(context.req.param('userId'));
+    if (!Number.isInteger(userId)) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+
+    // Main
+    const record = await context.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first<User>();
+    if (typeof record === 'undefined' || !record) {
+      return context.json({ error: 'Not found' }, 404);
+    }
+
+    // Response
+    return context.json({ message: 'ok', data: record }, 200);
+  } catch (e: any) {
+    console.error(e.message);
+    return context.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// user: Add user
+app.post('/users', async (context) => {
+  try {
+    // Request
+    const body = await context.req.json<UserAddRequest>();
+    if (!body.email && !body.email.match(/.+@.+\..+/)) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+
+    // Main
+    const result = await context.env.DB.prepare('INSERT INTO users (email) VALUES (?1)').bind(body.email).run();
+    if (!result.success) {
+      return context.json({ message: 'Failed to register' }, 500);
+    }
+
+    // Response
+    return context.json({ message: 'ok' }, 200);
+  } catch (e: any) {
+    console.error(e.message);
+    return context.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// roly-poly: Today count up
+app.post('/roly-poly/:userId', async (context) => {
+  try {
+    // Request
+    const userId = Number(context.req.param('userId'));
+    if (!Number.isInteger(userId)) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+    const body = await context.req.json<DailyRolyPolyCountUpRequest>();
+    if (!body.direction) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+    const direction = body.direction;
+    if (direction != 'east' && direction != 'west' && direction != 'south' && direction != 'north') {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+
+    // Main
+    // NOTE: The "sv-SE" locale is "YYYY-MM-DD" format.
+    const todayStr = new Date().toLocaleDateString('sv-SE');
+    const existsResult = await context.env.DB.prepare(
+      'SELECT EXISTS (SELECT * FROM daily_roly_poly_direction_counts WHERE user_id = ?1 AND date = ?2) as exists_record'
+    )
+      .bind(userId, todayStr)
+      .first<ExistsRecord>();
+    if (typeof existsResult === 'undefined' || !existsResult) {
+      return context.json({ message: 'Failed to register' }, 500);
+    }
+    if (existsResult.exists_record <= 0) {
+      // Insert if not exists.
+      const insertResult = await context.env.DB.prepare('INSERT INTO daily_roly_poly_direction_counts (user_id, date) VALUES (?1, ?2)')
+        .bind(userId, todayStr)
+        .run();
+      if (!insertResult.success) {
+        return context.json({ message: 'Failed to register' }, 500);
+      }
+    }
+
+    const updateResult = await context.env.DB.prepare(
+      `UPDATE daily_roly_poly_direction_counts SET ${direction} = ${direction} + 1 WHERE user_id = ?1 AND date = ?2`
+    )
+      .bind(userId, todayStr)
+      .run();
+    if (!updateResult.success) {
+      return context.json({ message: 'Failed to register' }, 500);
+    }
+
+    // Response
+    return context.json({ message: 'ok' }, 200);
+  } catch (e: any) {
+    console.error(e.message);
+    return context.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// roly-poly: Get today count
+app.get('/roly-poly/:userId', async (context) => {
+  try {
+    // Request
+    const userId = Number(context.req.param('userId'));
+    if (!Number.isInteger(userId)) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+
+    // Main
+    // NOTE: The "sv-SE" locale is "YYYY-MM-DD" format.
+    const todayStr = new Date().toLocaleDateString('sv-SE');
+    const record = await context.env.DB.prepare('SELECT * FROM daily_roly_poly_direction_counts WHERE user_id = ?1 AND date = ?2')
+      .bind(userId, todayStr)
+      .first<DailyRolyPolyDirectionCounts>();
+    if (typeof record === 'undefined' || !record) {
+      return context.json({ error: 'Not found' }, 404);
+    }
+
+    // Response
+    return context.json(
+      {
+        message: 'ok',
+        data: {
+          east: record.east,
+          west: record.west,
+          south: record.south,
+          north: record.north,
+        },
+      },
+      200
+    );
+  } catch (e: any) {
+    console.error(e.message);
+    return context.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// roly-poly: Get count
+app.get('/roly-poly/:userId/:year/:month/:day', async (context) => {
+  try {
+    // Request
+    const userId = Number(context.req.param('userId'));
+    const year = Number(context.req.param('year'));
+    const month = Number(context.req.param('month'));
+    const day = Number(context.req.param('day'));
+    if (!Number.isInteger(userId) || !Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+
+    // Main
+    // NOTE: The "sv-SE" locale is "YYYY-MM-DD" format.
+    const dayStr = new Date(year, month - 1, day).toLocaleDateString('sv-SE');
+    const record = await context.env.DB.prepare('SELECT * FROM daily_roly_poly_direction_counts WHERE user_id = ?1 AND date = ?2')
+      .bind(userId, dayStr)
+      .first<DailyRolyPolyDirectionCounts>();
+    if (typeof record === 'undefined' || !record) {
+      return context.json({ error: 'Not found' }, 404);
+    }
+
+    // Response
+    return context.json(
+      {
+        message: 'ok',
+        data: {
+          east: record.east,
+          west: record.west,
+          south: record.south,
+          north: record.north,
+        },
+      },
+      200
+    );
+  } catch (e: any) {
+    console.error(e.message);
+    return context.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// others: Today count up
+app.post('/others/:userId', async (context) => {
+  try {
+    // Request
+    const userId = Number(context.req.param('userId'));
+    if (!Number.isInteger(userId)) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+    const body = await context.req.json<DailyOthersCountUpRequest>();
+    if (!body.object) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+    const object = body.object;
+    if (object != 'dog' && object != 'cat' && object != 'butterfly') {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+
+    // Main
+    // NOTE: The "sv-SE" locale is "YYYY-MM-DD" format.
+    const todayStr = new Date().toLocaleDateString('sv-SE');
+    const existsResult = await context.env.DB.prepare(
+      'SELECT EXISTS (SELECT * FROM daily_others_counts WHERE user_id = ?1 AND date = ?2) as exists_record'
+    )
+      .bind(userId, todayStr)
+      .first<ExistsRecord>();
+    if (typeof existsResult === 'undefined' || !existsResult) {
+      return context.json({ message: 'Failed to register' }, 500);
+    }
+    if (existsResult.exists_record <= 0) {
+      // Insert if not exists.
+      const insertResult = await context.env.DB.prepare('INSERT INTO daily_others_counts (user_id, date) VALUES (?1, ?2)')
+        .bind(userId, todayStr)
+        .run();
+      if (!insertResult.success) {
+        return context.json({ message: 'Failed to register' }, 500);
+      }
+    }
+
+    const updateResult = await context.env.DB.prepare(
+      `UPDATE daily_others_counts SET ${object} = ${object} + 1 WHERE user_id = ?1 AND date = ?2`
+    )
+      .bind(userId, todayStr)
+      .run();
+    if (!updateResult.success) {
+      return context.json({ message: 'Failed to register' }, 500);
+    }
+
+    // Response
+    return context.json({ message: 'ok' }, 200);
+  } catch (e: any) {
+    console.error(e.message);
+    return context.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// others: Get today count
+app.get('/others/:userId', async (context) => {
+  try {
+    // Request
+    const userId = Number(context.req.param('userId'));
+    if (!Number.isInteger(userId)) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+
+    // Main
+    // NOTE: The "sv-SE" locale is "YYYY-MM-DD" format.
+    const todayStr = new Date().toLocaleDateString('sv-SE');
+    const record = await context.env.DB.prepare('SELECT * FROM daily_others_counts WHERE user_id = ?1 AND date = ?2')
+      .bind(userId, todayStr)
+      .first<DailyOthersCounts>();
+    if (typeof record === 'undefined' || !record) {
+      return context.json({ error: 'Not found' }, 404);
+    }
+
+    // Response
+    return context.json(
+      {
+        message: 'ok',
+        data: {
+          dog: record.dog,
+          cat: record.cat,
+          butterfly: record.butterfly,
+        },
+      },
+      200
+    );
+  } catch (e: any) {
+    console.error(e.message);
+    return context.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// others: Get count
+app.get('/others/:userId/:year/:month/:day', async (context) => {
+  try {
+    // Request
+    const userId = Number(context.req.param('userId'));
+    const year = Number(context.req.param('year'));
+    const month = Number(context.req.param('month'));
+    const day = Number(context.req.param('day'));
+    if (!Number.isInteger(userId) || !Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+
+    // Main
+    // NOTE: The "sv-SE" locale is "YYYY-MM-DD" format.
+    const dayStr = new Date(year, month - 1, day).toLocaleDateString('sv-SE');
+    const record = await context.env.DB.prepare('SELECT * FROM daily_others_counts WHERE user_id = ?1 AND date = ?2')
+      .bind(userId, dayStr)
+      .first<DailyOthersCounts>();
+    if (typeof record === 'undefined' || !record) {
+      return context.json({ error: 'Not found' }, 404);
+    }
+
+    // Response
+    return context.json(
+      {
+        message: 'ok',
+        data: {
+          dog: record.dog,
+          cat: record.cat,
+          butterfly: record.butterfly,
+        },
+      },
+      200
+    );
+  } catch (e: any) {
+    console.error(e.message);
+    return context.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+export default app;
