@@ -13,8 +13,7 @@ CREATE TABLE daily_roly_poly_direction_counts (
   west INTEGER NOT NULL DEFAULT 0,
   south INTEGER NOT NULL DEFAULT 0,
   north INTEGER NOT NULL DEFAULT 0,
-  FOREIGN KEY (user_id)
-    REFERENCES user(id)
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 DROP TABLE IF EXISTS daily_others_counts;
@@ -25,6 +24,5 @@ CREATE TABLE daily_others_counts (
   dog INTEGER NOT NULL DEFAULT 0,
   cat INTEGER NOT NULL DEFAULT 0,
   butterfly INTEGER NOT NULL DEFAULT 0,
-  FOREIGN KEY (user_id)
-    REFERENCES user (id)
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
