@@ -54,7 +54,7 @@ app.use('*', cors(), etag());
 /**
  * Endpoints
  */
-// user: Get user
+// user: Get user (id)
 app.get('/users/:userId', async (context) => {
   try {
     // Request
@@ -65,6 +65,30 @@ app.get('/users/:userId', async (context) => {
 
     // Main
     const record = await context.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first<User>();
+    if (typeof record === 'undefined' || !record) {
+      return context.json({ error: 'Not found' }, 404);
+    }
+
+    // Response
+    return context.json({ message: 'ok', data: record }, 200);
+  } catch (e: any) {
+    console.error(e.message);
+    return context.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// user: Get user
+app.post('/users', async (context) => {
+  try {
+    // Request
+    const body = await context.req.json<UserAddRequest>();
+    if (!body.email && !body.email.match(/.+@.+\..+/)) {
+      return context.json({ error: 'Invalid request' }, 400);
+    }
+    const email = body.email;
+
+    // Main
+    const record = await context.env.DB.prepare('SELECT * FROM users WHERE email = ?1').bind(email).first<User>();
     if (typeof record === 'undefined' || !record) {
       return context.json({ error: 'Not found' }, 404);
     }
