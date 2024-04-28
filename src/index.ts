@@ -184,45 +184,6 @@ app.post('/roly-poly/:userId', async (context) => {
   }
 });
 
-// roly-poly: Get today count
-app.get('/roly-poly/:userId', async (context) => {
-  // Request
-  const userId = Number(context.req.param('userId'));
-  if (!Number.isInteger(userId)) {
-    return context.json({ error: 'Invalid request' }, 400);
-  }
-
-  // Main
-  // NOTE: The "sv-SE" locale is "YYYY-MM-DD" format.
-  const todayStr = new Date().toLocaleDateString('sv-SE');
-
-  try {
-    const record = await context.env.DB.prepare('SELECT * FROM daily_roly_poly_direction_counts WHERE user_id = ?1 AND date = ?2')
-      .bind(userId, todayStr)
-      .first<DailyRolyPolyDirectionCounts>();
-    if (typeof record === 'undefined' || !record) {
-      return context.json({ error: 'Not found' }, 404);
-    }
-
-    // Response
-    return context.json(
-      {
-        message: 'ok',
-        data: {
-          east: record.east,
-          west: record.west,
-          south: record.south,
-          north: record.north,
-        },
-      },
-      200
-    );
-  } catch (e: any) {
-    console.error(e.message);
-    return context.json({ error: 'Internal server error' }, 500);
-  }
-});
-
 // roly-poly: Get count
 app.get('/roly-poly/:userId/:year/:month/:day', async (context) => {
   // Request
@@ -315,44 +276,6 @@ app.post('/others/:userId', async (context) => {
 
     // Response
     return context.json({ message: 'ok' }, 200);
-  } catch (e: any) {
-    console.error(e.message);
-    return context.json({ error: 'Internal server error' }, 500);
-  }
-});
-
-// others: Get today count
-app.get('/others/:userId', async (context) => {
-  // Request
-  const userId = Number(context.req.param('userId'));
-  if (!Number.isInteger(userId)) {
-    return context.json({ error: 'Invalid request' }, 400);
-  }
-
-  // Main
-  // NOTE: The "sv-SE" locale is "YYYY-MM-DD" format.
-  const todayStr = new Date().toLocaleDateString('sv-SE');
-
-  try {
-    const record = await context.env.DB.prepare('SELECT * FROM daily_others_counts WHERE user_id = ?1 AND date = ?2')
-      .bind(userId, todayStr)
-      .first<DailyOthersCounts>();
-    if (typeof record === 'undefined' || !record) {
-      return context.json({ error: 'Not found' }, 404);
-    }
-
-    // Response
-    return context.json(
-      {
-        message: 'ok',
-        data: {
-          dog: record.dog,
-          cat: record.cat,
-          butterfly: record.butterfly,
-        },
-      },
-      200
-    );
   } catch (e: any) {
     console.error(e.message);
     return context.json({ error: 'Internal server error' }, 500);
