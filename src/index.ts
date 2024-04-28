@@ -185,13 +185,17 @@ app.post('/roly-poly/:userId', async (context) => {
 });
 
 // roly-poly: Get count
-app.get('/roly-poly/:userId/:year/:month/:day', async (context) => {
+app.get('/roly-poly/:userId', async (context) => {
   // Request
   const userId = Number(context.req.param('userId'));
-  const year = Number(context.req.param('year'));
-  const month = Number(context.req.param('month'));
-  const day = Number(context.req.param('day'));
-  if (!Number.isInteger(userId) || !Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+  if (!Number.isInteger(userId)) {
+    return context.json({ error: 'Invalid request' }, 400);
+  }
+  // TODO: Support year/month only.
+  const year = Number(context.req.query('year'));
+  const month = Number(context.req.query('month'));
+  const day = Number(context.req.query('day'));
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
     return context.json({ error: 'Invalid request' }, 400);
   }
 
@@ -286,10 +290,14 @@ app.post('/others/:userId', async (context) => {
 app.get('/others/:userId/:year/:month/:day', async (context) => {
   // Request
   const userId = Number(context.req.param('userId'));
-  const year = Number(context.req.param('year'));
-  const month = Number(context.req.param('month'));
-  const day = Number(context.req.param('day'));
-  if (!Number.isInteger(userId) || !Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+  if (!Number.isInteger(userId)) {
+    return context.json({ error: 'Invalid request' }, 400);
+  }
+  // TODO: Support year/month only.
+  const year = Number(context.req.query('year'));
+  const month = Number(context.req.query('month'));
+  const day = Number(context.req.query('day'));
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
     return context.json({ error: 'Invalid request' }, 400);
   }
 
