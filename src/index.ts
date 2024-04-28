@@ -57,8 +57,8 @@ app.use('*', cors(), etag());
 // user: Get user
 app.get('/users', async (context) => {
   // Request
-  const userId = context.req.query('user_id');
-  const email = decodeURIComponent(context.req.query('email') || '');
+  const userId = Number(context.req.query('id'));
+  const email = context.req.query('email');
   if (!userId && !email) {
     return context.json({ error: 'Invalid request' }, 400);
   }
@@ -83,7 +83,7 @@ app.get('/users', async (context) => {
 
   try {
     let stmt = context.env.DB.prepare('SELECT * FROM users WHERE ' + addStmts.join(' '));
-    binds.forEach((bind: string) => {
+    binds.forEach((bind: string | number) => {
       stmt = stmt.bind(bind);
     });
     const record = await stmt.first<User>();
@@ -287,7 +287,7 @@ app.post('/others/:userId', async (context) => {
 });
 
 // others: Get count
-app.get('/others/:userId/:year/:month/:day', async (context) => {
+app.get('/others/:userId', async (context) => {
   // Request
   const userId = Number(context.req.param('userId'));
   if (!Number.isInteger(userId)) {
