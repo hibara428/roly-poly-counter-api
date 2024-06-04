@@ -9,6 +9,7 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
+    "@formkit/tempo": "^0.1.1",
     "hono": "^3.0.2"
   },
   "devDependencies": {
