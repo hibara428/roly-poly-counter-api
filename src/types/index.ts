@@ -11,15 +11,11 @@ export type UserAddRequest = {
 };
 export type DailyRolyPolyCountUpRequest = {
   direction: 'east' | 'west' | 'south' | 'north';
-  year: number;
-  month: number;
-  day: number;
+  day: string;
 };
 export type DailyOthersCountUpRequest = {
   object: 'dog' | 'cat' | 'butterfly';
-  year: number;
-  month: number;
-  day: number;
+  day: string;
 };
 // DB table definitions
 export type User = {

@@ -66,7 +66,7 @@ export const countUp = async (context: Context<Env>) => {
   if (object != 'dog' && object != 'cat' && object != 'butterfly') {
     return context.json({ error: 'Invalid request' }, 400);
   }
-  const day = context.req.query('day');
+  const day = body.day;
   if (!day) {
     return context.json({ error: 'Invalid request' }, 400);
   }

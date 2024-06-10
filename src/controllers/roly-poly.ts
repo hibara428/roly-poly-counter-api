@@ -68,7 +68,7 @@ export const countUp = async (context: Context<Env>) => {
   if (direction != 'east' && direction != 'west' && direction != 'south' && direction != 'north') {
     return context.json({ error: 'Invalid request' }, 400);
   }
-  const day = context.req.query('day');
+  const day = body.day;
   if (!day) {
     return context.json({ error: 'Invalid request' }, 400);
   }
